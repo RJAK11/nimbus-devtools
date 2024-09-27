@@ -48,7 +48,7 @@ var nimbus = class extends ExtensionAPI {
             }
           },
 
-          async enrollWithFeatureConfig(featureId, featureValue, isRollout) {
+          async enrollWithFeatureConfig(featureId, featureValue, isRollout, forceEnroll) {
             try {
               const recipe = JSON.parse(`{
                 "bucketConfig": {
@@ -79,11 +79,28 @@ var nimbus = class extends ExtensionAPI {
                 "userFacingDescription": "Testing the feature with feature ID: ${featureId}."
               }`);
 
-              const result = await ExperimentManager.enroll(
-                recipe,
-                "nimbus-devtools",
-              );
-              return result !== null;
+              const experimentStore = ExperimentManager.store.getAll();
+              const slugExistsInStore = experimentStore.some(experiment => experiment.slug === recipe.slug);
+              const activeEnrollment = experimentStore.find(experiment =>
+                experiment.featureIds.includes(featureId) && experiment.active
+              )?.slug || null;
+
+              if (slugExistsInStore || activeEnrollment) {
+                if (!forceEnroll) {
+                  return {
+                    enrolled: false,
+                    error: { slugExistsInStore, activeEnrollment }
+                  };
+                }
+
+                if (slugExistsInStore) {
+                  this.deleteInactiveEnrollment(`nimbus-devtools-${featureId}-enrollment`);
+                } else if (activeEnrollment) {
+                  this.unenroll(activeEnrollment);
+                }
+              }
+              const result = await ExperimentManager.enroll(recipe, "nimbus-devtools");
+              return { enrolled: result !== null, error: null };
             } catch (error) {
               console.error(error);
               throw error;

@@ -1,5 +1,5 @@
 import { ChangeEvent, FC, useState, useCallback } from "react";
-import { Form, Container, Button, Row, Col } from "react-bootstrap";
+import { Form, Container, Button, Row, Col, Modal } from "react-bootstrap";
 
 import { useToastsContext } from "../hooks/useToasts";
 import DropdownMenu from "./DropdownMenu";
@@ -8,6 +8,8 @@ const FeatureConfigPage: FC = () => {
   const [jsonInput, setJsonInput] = useState("");
   const [selectedFeatureId, setSelectedFeatureId] = useState("");
   const [isRollout, setIsRollout] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
   const { addToast } = useToastsContext();
 
   const handleInputChange = useCallback(
@@ -28,7 +30,7 @@ const FeatureConfigPage: FC = () => {
     [],
   );
 
-  const handleEnrollClick = useCallback(async () => {
+  const handleEnrollClick = useCallback(async (forceEnroll = false) => {
     if (selectedFeatureId === "") {
       addToast({ message: "Invalid Input: Select feature", variant: "danger" });
     } else if (jsonInput === "") {
@@ -39,12 +41,16 @@ const FeatureConfigPage: FC = () => {
           selectedFeatureId,
           JSON.parse(jsonInput) as object,
           isRollout,
+          forceEnroll
         );
 
-        if (result) {
+        if (result.enrolled) {
           addToast({ message: "Enrollment successful", variant: "success" });
-        } else {
-          addToast({ message: "Enrollment failed", variant: "danger" });
+        } else if (result.error) {
+          setModalMessage(
+            "You are already enrolled into this feature. Would you like to force enroll by removing the previous enrollment and re-enrolling with the new configuration?"
+          );
+          setShowModal(true);
         }
       } catch (error) {
         addToast({
@@ -54,6 +60,15 @@ const FeatureConfigPage: FC = () => {
       }
     }
   }, [jsonInput, selectedFeatureId, isRollout, addToast]);
+
+  const handleModalConfirm = useCallback(() => {
+    setShowModal(false);
+    handleEnrollClick(true);
+  }, [handleEnrollClick]);
+
+  const handleModalClose = useCallback(() => {
+    setShowModal(false);
+  }, []);
 
   return (
     <Container className="main-content p-2 overflow-hidden">
@@ -84,12 +99,27 @@ const FeatureConfigPage: FC = () => {
           />
         </Form.Group>
         <Button
-          onClick={handleEnrollClick}
+          onClick={() => handleEnrollClick()}
           className="mt-2 py-3 px-4 fs-5 border-0 w-100 rounded text-white dark-button"
         >
           Enroll
         </Button>
       </Form>
+
+      <Modal show={showModal} onHide={handleModalClose}>
+        <Modal.Header closeButton>
+          <Modal.Title>Force Enrollment</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>{modalMessage}</Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleModalClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleModalConfirm}>
+            Force Enroll
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   );
 };
